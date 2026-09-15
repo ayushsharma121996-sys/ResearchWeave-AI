@@ -57,8 +57,24 @@ class CompareRequest(BaseModel):
     topic: str = "the uploaded papers"
 
 
+@app.get("/")
+def root():
+    return {
+        "message": "ResearchWeave AI API is online!",
+        "status": "ok",
+        "docs": "/docs",
+        "endpoints": {
+            "health": "/health",
+            "upload": "/papers/upload",
+            "ask": "/ask",
+            "compare": "/compare"
+        }
+    }
+
+
 @app.get("/health")
 def health():
+
     indexed = _state["index"] is not None
     chunks_count = len(_state["index"].chunks) if indexed else 0
     return {"status": "ok", "index_loaded": indexed, "total_chunks": chunks_count}
