@@ -6,14 +6,32 @@ reproducible: change one constant, rerun eval, compare numbers.
 import os
 from pathlib import Path
 
+import tempfile
+
 # --- Paths -------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
-PAPERS_DIR = BASE_DIR / "data" / "papers"
-INDEX_DIR = BASE_DIR / "data" / "index"
 EVAL_DIR = BASE_DIR / "app" / "eval"
 
-PAPERS_DIR.mkdir(parents=True, exist_ok=True)
-INDEX_DIR.mkdir(parents=True, exist_ok=True)
+# On Vercel / AWS Lambda, the application directory (/var/task) is read-only.
+# We must use /tmp for temporary uploads and generated indexes.
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    DATA_DIR = Path(tempfile.gettempdir()) / "researchpilot_data"
+else:
+    DATA_DIR = BASE_DIR / "data"
+
+PAPERS_DIR = DATA_DIR / "papers"
+INDEX_DIR = DATA_DIR / "index"
+
+try:
+    PAPERS_DIR.mkdir(parents=True, exist_ok=True)
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
+except (OSError, PermissionError):
+    DATA_DIR = Path(tempfile.gettempdir()) / "researchpilot_data"
+    PAPERS_DIR = DATA_DIR / "papers"
+    INDEX_DIR = DATA_DIR / "index"
+    PAPERS_DIR.mkdir(parents=True, exist_ok=True)
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
+
 
 # --- LLM models ----------------------------------------------------------
 # Route by task complexity. Extraction/claim-matching need strong reasoning;
