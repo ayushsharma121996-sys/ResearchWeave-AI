@@ -57,23 +57,233 @@ class CompareRequest(BaseModel):
     topic: str = "the uploaded papers"
 
 
-@app.get("/")
-def root():
-    return {
-        "message": "ResearchWeave AI API is online!",
-        "status": "ok",
-        "docs": "/docs",
-        "endpoints": {
-            "health": "/health",
-            "upload": "/papers/upload",
-            "ask": "/ask",
-            "compare": "/compare"
+from fastapi.responses import HTMLResponse
+
+HTML_UI = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResearchPilot AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg: #0e1117;
+            --sidebar-bg: #161b22;
+            --card-bg: #1f242d;
+            --accent: #ff4b4b;
+            --text: #fafafa;
+            --text-muted: #8b949e;
+            --border: #30363d;
         }
-    }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 300px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .sidebar h2 { font-size: 1.1rem; margin-top: 0; }
+        .upload-area {
+            background: var(--card-bg);
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 24px 16px;
+            text-align: center;
+            cursor: pointer;
+        }
+        .upload-area:hover { border-color: var(--accent); }
+        .btn {
+            background-color: var(--card-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .btn-primary {
+            background-color: var(--accent);
+            border: none;
+            color: #fff;
+        }
+        .main {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            max-width: 900px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .logo { font-size: 2.5rem; }
+        .title-container h1 { margin: 0; font-size: 2rem; }
+        .subtitle { color: var(--text-muted); margin-top: 4px; }
+        .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+        .tab { padding: 12px 0; cursor: pointer; color: var(--text-muted); font-weight: 500; border-bottom: 2px solid transparent; }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            box-sizing: border-box;
+            margin-bottom: 16px;
+        }
+        .output-box {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+        table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+        th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+        th { background: var(--sidebar-bg); }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>1. Upload papers</h2>
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <p><strong>Upload PDFs</strong></p>
+            <p style="font-size: 0.8rem; color: var(--text-muted);">Select research papers</p>
+            <input type="file" id="fileInput" multiple accept=".pdf" style="display:none" onchange="uploadFiles()">
+        </div>
+        <button class="btn" onclick="document.getElementById('fileInput').click()">Upload Files</button>
+        <div id="status" style="font-size:0.85rem; color: var(--text-muted);"></div>
+    </div>
+    <div class="main">
+        <div class="header">
+            <div class="logo">📚</div>
+            <div class="title-container">
+                <h1>ResearchPilot AI</h1>
+                <div class="subtitle">Upload research papers → ask grounded questions → get a structured comparison report.</div>
+            </div>
+        </div>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('ask')">💬 Ask a question</div>
+            <div class="tab" onclick="switchTab('compare')">📊 Compare papers</div>
+        </div>
+        <div id="tab-ask" class="tab-content active">
+            <p><strong>Ask a grounded question about the uploaded papers</strong></p>
+            <input type="text" id="askInput" placeholder="What is LoRA and how does it reduce memory?">
+            <button class="btn btn-primary" onclick="submitAsk()">Ask</button>
+            <div id="askOutput" class="output-box" style="display:none;"></div>
+        </div>
+        <div id="tab-compare" class="tab-content">
+            <p><strong>Topic for the report</strong></p>
+            <input type="text" id="compareInput" value="the uploaded papers">
+            <button class="btn btn-primary" onclick="submitCompare()">Generate comparison report</button>
+            <div id="compareOutput" class="output-box" style="display:none;"></div>
+        </div>
+    </div>
+    <script>
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            if(name==='ask'){
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('tab-ask').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('tab-compare').classList.add('active');
+            }
+        }
+        async function uploadFiles() {
+            const input = document.getElementById('fileInput');
+            if(!input.files.length) return;
+            const formData = new FormData();
+            for(let f of input.files) formData.append('files', f);
+            document.getElementById('status').innerText = 'Indexing papers...';
+            try {
+                const res = await fetch('/papers/upload', {method: 'POST', body: formData});
+                const data = await res.json();
+                if(res.ok) {
+                    document.getElementById('status').innerText = `Indexed ${data.papers_ingested.length} paper(s) (${data.total_chunks} chunks).`;
+                } else {
+                    document.getElementById('status').innerText = 'Upload error: ' + (data.detail || 'Failed');
+                }
+            } catch(e) {
+                document.getElementById('status').innerText = 'Error uploading: ' + e;
+            }
+        }
+        async function submitAsk() {
+            const q = document.getElementById('askInput').value;
+            if(!q) return;
+            const out = document.getElementById('askOutput');
+            out.style.display = 'block';
+            out.innerText = 'Thinking...';
+            try {
+                const res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({question: q})
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    out.innerHTML = marked.parse(data.answer);
+                } else {
+                    out.innerText = 'Error: ' + (data.detail || 'Failed');
+                }
+            } catch(e) {
+                out.innerText = 'Error: ' + e;
+            }
+        }
+        async function submitCompare() {
+            const topic = document.getElementById('compareInput').value;
+            const out = document.getElementById('compareOutput');
+            out.style.display = 'block';
+            out.innerText = 'Extracting structured data, cross-checking claims, generating report...';
+            try {
+                const res = await fetch('/compare', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({topic: topic})
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    out.innerHTML = marked.parse(data.report_markdown);
+                } else {
+                    out.innerText = 'Error: ' + (data.detail || 'Failed');
+                }
+            } catch(e) {
+                out.innerText = 'Error: ' + e;
+            }
+        }
+    </script>
+</body>
+</html>"""
+
+
+@app.get("/", response_class=HTMLResponse)
+def root():
+    return HTML_UI
 
 
 @app.get("/health")
 def health():
+
 
     indexed = _state["index"] is not None
     chunks_count = len(_state["index"].chunks) if indexed else 0
