@@ -16,7 +16,13 @@ from typing import List
 
 import numpy as np
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
+
+try:
+    from fastembed import TextEmbedding
+    _USE_FASTEMBED = True
+except ImportError:
+    from sentence_transformers import SentenceTransformer
+    _USE_FASTEMBED = False
 
 from app.config import (
     EMBEDDING_MODEL, INDEX_DIR, TOP_K_DENSE, TOP_K_BM25, TOP_K_FINAL, RRF_K,
@@ -24,9 +30,18 @@ from app.config import (
 from app.ingestion.chunker import Chunk
 
 
+def _normalize(vec: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(vec, axis=-1, keepdims=True)
+    norm = np.where(norm == 0, 1.0, norm)
+    return vec / norm
+
+
 class HybridIndex:
     def __init__(self):
-        self._embedder = SentenceTransformer(EMBEDDING_MODEL)
+        if _USE_FASTEMBED:
+            self._embedder = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        else:
+            self._embedder = SentenceTransformer(EMBEDDING_MODEL)
         self.chunks: List[Chunk] = []
         self._embeddings: np.ndarray | None = None
         self._bm25: BM25Okapi | None = None
@@ -37,9 +52,13 @@ class HybridIndex:
         texts = [c.text for c in chunks]
 
         # Dense
-        self._embeddings = self._embedder.encode(
-            texts, show_progress_bar=False, normalize_embeddings=True
-        )
+        if _USE_FASTEMBED:
+            raw_emb = np.array(list(self._embedder.embed(texts)))
+            self._embeddings = _normalize(raw_emb)
+        else:
+            self._embeddings = self._embedder.encode(
+                texts, show_progress_bar=False, normalize_embeddings=True
+            )
 
         # Sparse
         tokenized = [t.lower().split() for t in texts]
@@ -71,7 +90,12 @@ class HybridIndex:
             return []
 
         # Dense ranking
-        q_emb = self._embedder.encode([query], normalize_embeddings=True)[0]
+        if _USE_FASTEMBED:
+            raw_q = np.array(list(self._embedder.embed([query])))[0]
+            q_emb = _normalize(raw_q)
+        else:
+            q_emb = self._embedder.encode([query], normalize_embeddings=True)[0]
+
         sims = self._embeddings[candidate_idx] @ q_emb
         dense_order = [candidate_idx[i] for i in np.argsort(-sims)[:TOP_K_DENSE]]
 
@@ -90,3 +114,4 @@ class HybridIndex:
 
         fused = sorted(rrf_scores.items(), key=lambda x: -x[1])[:top_k]
         return [self.chunks[idx] for idx, _ in fused]
+
