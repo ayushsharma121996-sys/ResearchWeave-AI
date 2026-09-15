@@ -30,6 +30,8 @@ from app.config import (
 from app.ingestion.chunker import Chunk
 
 
+import tempfile
+
 def _normalize(vec: np.ndarray) -> np.ndarray:
     norm = np.linalg.norm(vec, axis=-1, keepdims=True)
     norm = np.where(norm == 0, 1.0, norm)
@@ -39,12 +41,17 @@ def _normalize(vec: np.ndarray) -> np.ndarray:
 class HybridIndex:
     def __init__(self):
         if _USE_FASTEMBED:
-            self._embedder = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+            cache_path = str(Path(tempfile.gettempdir()) / "fastembed_cache")
+            self._embedder = TextEmbedding(
+                model_name="BAAI/bge-small-en-v1.5",
+                cache_dir=cache_path
+            )
         else:
             self._embedder = SentenceTransformer(EMBEDDING_MODEL)
         self.chunks: List[Chunk] = []
         self._embeddings: np.ndarray | None = None
         self._bm25: BM25Okapi | None = None
+
 
     # ---- build -----------------------------------------------------------
     def build(self, chunks: List[Chunk]) -> None:

@@ -22,6 +22,13 @@ else:
 PAPERS_DIR = DATA_DIR / "papers"
 INDEX_DIR = DATA_DIR / "index"
 
+# Force HuggingFace, FastEmbed, and ONNX model caches to writable /tmp directory
+_tmp_dir = tempfile.gettempdir()
+os.environ.setdefault("HF_HOME", os.path.join(_tmp_dir, "hf_home"))
+os.environ.setdefault("FASTEMBED_CACHE_PATH", os.path.join(_tmp_dir, "fastembed_cache"))
+os.environ.setdefault("TRANSFORMERS_CACHE", os.path.join(_tmp_dir, "hf_home"))
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+
 try:
     PAPERS_DIR.mkdir(parents=True, exist_ok=True)
     INDEX_DIR.mkdir(parents=True, exist_ok=True)
