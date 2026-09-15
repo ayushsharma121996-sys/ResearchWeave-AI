@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+data/papers/*.pdf
+data/index/*.pkl
+app/eval/eval_set.json
+app/eval/last_eval_details.json
+.venv/
+venv/

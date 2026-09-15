@@ -1,0 +1,14 @@
+[
+  {
+    "question": "What dataset did the paper use to evaluate their fine-tuning method?",
+    "expected_paper_id": "paper1",
+    "expected_section": "experiments",
+    "notes": "Answer should mention the specific dataset name, e.g. 'GLUE'."
+  },
+  {
+    "question": "What is the main limitation the authors acknowledge about their approach?",
+    "expected_paper_id": "paper2",
+    "expected_section": "limitations",
+    "notes": "Should not invent a limitation not stated in the paper."
+  }
+]
