@@ -1,4 +1,3 @@
-import pytest
 from app.ingestion.parser import Paragraph, _looks_like_heading, _merge_adjacent_lines
 from app.ingestion.chunker import chunk_paragraphs, _approx_tokens, Chunk
 

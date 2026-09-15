@@ -57,14 +57,23 @@ def get_api_key() -> tuple[str, str]:
         if anthropic_key:
             return ("anthropic", anthropic_key)
 
-    # If Groq key is configured, use Groq (Fast Free Llama Cloud API)
+    # Default to Groq Free Cloud API if key is present
     groq_key = os.environ.get("GROQ_API_KEY") or GROQ_API_KEY
     if groq_key:
         return ("groq", groq_key)
 
-    # Default to 100% Free Local Ollama Llama
+    # On Vercel / AWS Lambda, if no key is set, local Ollama cannot be reached
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        raise RuntimeError(
+            "GROQ_API_KEY is not set in Vercel Environment Variables. "
+            "Please go to your Vercel Project Settings -> Environment Variables, "
+            "add GROQ_API_KEY, and redeploy."
+        )
+
+    # Default to 100% Free Local Ollama Llama for local desktop use
     ollama_host = os.environ.get("OLLAMA_HOST") or OLLAMA_HOST or "http://localhost:11434"
     return ("ollama", ollama_host)
+
 
 
 def call_llm(system: str, user: str, model: str = MODEL_QA, max_tokens: int = 1500, retries: int = 5) -> str:
